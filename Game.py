@@ -77,7 +77,7 @@ class Game:
                 should_check = True
                 break
         if should_check:
-            print "checking pass", [self.pgs[receive_player].cards[from_player][i]['rank'] for i in xrange(6)]
+            # print "checking pass", [self.pgs[receive_player].cards[from_player][i]['rank'] for i in xrange(6)]
             self.check_input(self.pgs[receive_player].cards[from_player][which_card]['rank'] == 'Unclear', \
                    ("Cannot pass the %dth card, as it has already been passed" % which_card))
 
@@ -105,7 +105,7 @@ class Game:
                     should_check = True
                     break
         if should_check:
-            print "checking guess", [self.pgs[guessing_player].cards[which_player][i]['rank'] for i in xrange(6)], [self.pgs[guessing_player].cards[(which_player + 2) % 4][i]['rank'] for i in xrange(6)]
+            # print "checking guess", [self.pgs[guessing_player].cards[which_player][i]['rank'] for i in xrange(6)], [self.pgs[guessing_player].cards[(which_player + 2) % 4][i]['rank'] for i in xrange(6)]
 
             self.check_input(self.pgs[guessing_player].cards[which_player][which_card]['rank'] == 'Unclear', \
                     "Cannot guess the %dth card, as it has already been revealed" % which_card)
@@ -132,7 +132,7 @@ class Game:
                 should_check = True
                 break
         if should_check:
-            print "checking flip", [self.pgs[(flip_player + 1) % 4].cards[flip_player][i]['rank'] for i in xrange(6)]
+            # print "checking flip", [self.pgs[(flip_player + 1) % 4].cards[flip_player][i]['rank'] for i in xrange(6)]
             self.check_input(self.pgs[(flip_player + 1) % 4].cards[flip_player][which_card]['rank'] == 'Unclear', \
                 "Cannot flip the %dth card, as it has already been flipped" % which_card)
 

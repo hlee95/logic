@@ -27,12 +27,7 @@ class HannaLarryPlayer(Player):
     self.flippable = range(self.CARDS_PER_PLAYER)
     self.passable = range(self.CARDS_PER_PLAYER)
     self.guessable = self.get_opponent_positions()
-    ### For debugging.
-    self.flipped = [] # what we have flipped
-    self.all_revealed = [] # everything that's been revealed about opponents via other peoples' flips or correct guesses
-    self.passed = [] # what we have passed
-    self.guessed = [] # what we have guessed
-    ###
+
     self.wrong_guesses = self.empty_dict()
     self.known_cards = self.empty_array()
     # So that we know which actions from the history we need to consider.
@@ -50,12 +45,10 @@ class HannaLarryPlayer(Player):
     """
     print "{} passing card".format(self.me)
     print self.passable
-    print self.flippable
     self.process_gamestate(gamestate)
     if len(self.passable) > 0:
       which_card = random.choice(self.passable)
       self.passable.remove(which_card)
-      self.passed.append(which_card)
     else:
       which_card = 0
     print " {} passed {}".format(self.me, which_card)
@@ -73,14 +66,6 @@ class HannaLarryPlayer(Player):
     # Make sure to only guess from the opponents' hands.
     if len(self.guessable) > 0:
       pos = random.choice(self.guessable)
-      print self.guessable
-      print self.guessed
-      print self.all_revealed
-      # This was a bug, we can still guess it unless it's correct.
-      # self.guessable.remove(pos)
-      print gamestate.cards
-      self.guessed.append(pos)
-      print pos
     else:
       pos = ((self.me + 1) % self.NUM_PLAYERS, 0)
     guess = random.choice(range(self.NUM_RANKS))
@@ -99,7 +84,6 @@ class HannaLarryPlayer(Player):
       self.flippable.remove(which_card)
       if which_card in self.passable:
         self.passable.remove(which_card)
-      self.flipped.append(which_card)
     else:
       which_card = 0
     print " {} flipped {}".format(self.me, which_card)
@@ -156,11 +140,11 @@ class HannaLarryPlayer(Player):
               continue
             else:
               found_possible_card = True
-              print "{} deduced card ({}, {}) is {}".format(self.me, i, j, card)
+              # print "{} deduced card ({}, {}) is {}".format(self.me, i, j, card)
               self.known_cards[i][j] = card
 
     # print "Current distribution:"
-    #self.pprint_distribution(self.distribution)
+    # self.pprint_distribution(self.distribution)
 
   def process_action(self, action, cards):
     """
@@ -180,7 +164,6 @@ class HannaLarryPlayer(Player):
         print "correct guess ", (action.which_player, action.which_card)
         # Remove from our guessable list.
         if (action.which_player, action.which_card) in self.guessable:
-          self.all_revealed.append((action.which_player, action.which_card, cards[action.which_player][action.which_card]))
           self.guessable.remove((action.which_player, action.which_card))
         if action.which_player == self.me:
           if action.which_card in self.passable:
@@ -193,7 +176,6 @@ class HannaLarryPlayer(Player):
     elif action.action_type == "flip":
       # TODO: They think that card is already known or not important? Do something with that information.
       # Remove from our guessable list.
-      self.all_revealed.append((action.player, action.which_card, cards[action.player][action.which_card]))
       if (action.player, action.which_card) in self.guessable:
         self.guessable.remove((action.player, action.which_card))
     else:
@@ -268,7 +250,6 @@ class HannaLarryPlayer(Player):
       # If we're at the max index, update counts and pop out
       max_index = self.NUM_PLAYERS * self.CARDS_PER_PLAYER
       if current_index == max_index:
-        # print "Made it to max index!"
         for i in xrange(self.NUM_PLAYERS):
           for j in xrange(self.CARDS_PER_PLAYER):
             card_dicts[i][j][game_board[i][j]] += 1
@@ -284,7 +265,6 @@ class HannaLarryPlayer(Player):
       # Otherwise we determine valid moves given the filter
       else:
         valid_plays = filter(i, j, possibilities)
-        # print "{} Valid plays for {} {}:".format(self.me, i,j), valid_plays
         # Recurse on all valid plays
         for play in valid_plays:
           # Set game board to play and add to known cards, then recurse
@@ -310,11 +290,10 @@ class HannaLarryPlayer(Player):
         # Filter for wrong guesses
         guesses = self.wrong_guesses[i][j].keys()
         if play in guesses:
-          # print "Filtered as wrong guess:", play
           continue
 
         valid = True
-        # Filter for > < conditions
+        # Bound the range of possible cards.
         players_cards = game_board[i]
         # Go to left
         for a in xrange(j-1, -1, -1):
@@ -323,13 +302,10 @@ class HannaLarryPlayer(Player):
             # If equal color, >= invalidates (can't be equal either)
             if self.num_to_color(players_cards[a]) == self.num_to_color(play):
               if self.num_to_rank(players_cards[a]) >= self.num_to_rank(play):
-                # print "Filtered since index {} val {} >= {}:".format(
-                #  a, self.num_to_rank(players_cards[a]), self.num_to_rank(play))
                 valid = False
                 break
             else:
               if self.num_to_rank(players_cards[a]) > self.num_to_rank(play):
-                # print "Filtered as > condition left:", play
                 valid = False
                 break
         # Go to right
@@ -339,11 +315,9 @@ class HannaLarryPlayer(Player):
             # If equal color, <= invalidates (can't be equal either)
             if self.num_to_color(players_cards[a]) == self.num_to_color(play):
               if self.num_to_rank(players_cards[a]) <= self.num_to_rank(play):
-                # print "Filtered as <= condition right:", play
                 valid = False
             else:
               if self.num_to_rank(players_cards[a]) < self.num_to_rank(play):
-                # print "Filtered as < condition right:", play
                 valid = False
         if not valid:
           continue
