@@ -19,5 +19,6 @@ for game_count in range(0, num_games):
 		print(">>> Error: %r <<<" % e.args[1])
 
 	total_score = [sum(x) for x in zip(score, total_score)]
-	print("\n\n\n\n\n\n\n\n\n\n\nscore is %r" % score)
-	print("total score is %r" % total_score)
+	print("\n\n\n\n\n\n\ngame %d" % game_count)
+	print("score is %r" % score)
+	print("total score is %r\n\n\n\n\n\n\n" % total_score)

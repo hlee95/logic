@@ -152,6 +152,7 @@ class Game:
         for i in range(4):
             for j in range(6):
                 if cards[i][j] != self.gs.cards[i][j]['rank']:
+                    raise Exception("incorrect claim")
                     self.score = self.score_with_winner((player+1)%4)
                     return
 
