@@ -49,6 +49,8 @@ class HannaLarryPlayer(Player):
     Choose to pass the card that gives the most information.
     """
     print "{} passing card".format(self.me)
+    print self.passable
+    print self.flippable
     self.process_gamestate(gamestate)
     if len(self.passable) > 0:
       which_card = random.choice(self.passable)
@@ -56,32 +58,41 @@ class HannaLarryPlayer(Player):
       self.passed.append(which_card)
     else:
       which_card = 0
+    print " {} passed {}".format(self.me, which_card)
     return which_card
 
   def guess_card(self, gamestate):
     """
-    Choose to guess that card with highest likelihood.
+    Choose to guess the card with highest likelihood.
     """
     print "{} guessing card".format(self.me)
+    print self.guessable
     self.process_gamestate(gamestate)
     # Get positions corresponding to opponents' cards.
     # TODO: Iterate through the distribution and guess the most likely card.
     # Make sure to only guess from the opponents' hands.
-    pos = random.choice(self.guessable)
-    print self.guessable
-    print self.guessed
-    print self.all_revealed
-    self.guessable.remove(pos)
-    print gamestate.cards
-    self.guessed.append(pos)
-    print pos
-    return (pos[0], pos[1], random.choice(range(self.NUM_RANKS)))
+    if len(self.guessable) > 0:
+      pos = random.choice(self.guessable)
+      print self.guessable
+      print self.guessed
+      print self.all_revealed
+      # This was a bug, we can still guess it unless it's correct.
+      # self.guessable.remove(pos)
+      print gamestate.cards
+      self.guessed.append(pos)
+      print pos
+    else:
+      pos = ((self.me + 1) % self.NUM_PLAYERS, 0)
+    guess = random.choice(range(self.NUM_RANKS))
+    print " {} guessed ({}, {}) as {}".format(self.me, pos[0], pos[1], guess)
+    return (pos[0], pos[1], guess)
 
   def flip_card(self, gamestate):
     """
     Choose to flip the card that yields the least information.
     """
     print "{} flipping card".format(self.me)
+    print self.flippable
     self.process_gamestate(gamestate)
     if len(self.flippable) > 0:
       which_card = random.choice(self.flippable)
@@ -91,6 +102,7 @@ class HannaLarryPlayer(Player):
       self.flipped.append(which_card)
     else:
       which_card = 0
+    print " {} flipped {}".format(self.me, which_card)
     return which_card
 
   def claim(self, gamestate):
@@ -116,6 +128,8 @@ class HannaLarryPlayer(Player):
               found_possible_card = True
               hand.append(self.num_to_rank(card))
       claim.append(hand)
+    if len(claim[0]) < self.CARDS_PER_PLAYER:
+      return (False, [])
     print "{} is claiming ".format(self.me), claim
     return (True, claim)
 
@@ -130,11 +144,23 @@ class HannaLarryPlayer(Player):
     for i in xrange(self.next_action_idx, len(gamestate.history)):
       self.process_action(gamestate.history[i], gamestate.cards)
     self.next_action_idx = len(gamestate.history)
-    self.known_cards = deepcopy(gamestate.cards)
     # Update the distribution.
     self.distribution = self.make_distribution(self.undict_cards(gamestate.cards))
-    print "Current distribution:"
-    self.pprint_distribution(self.distribution)
+    # Add our deductions to self.known_cards.
+    for i in xrange(self.NUM_PLAYERS):
+      for j in xrange(self.CARDS_PER_PLAYER):
+        found_possible_card = False
+        for card, count in self.distribution[i][j].iteritems():
+          if count > 0:
+            if found_possible_card:
+              continue
+            else:
+              found_possible_card = True
+              print "{} deduced card ({}, {}) is {}".format(self.me, i, j, card)
+              self.known_cards[i][j] = card
+
+    # print "Current distribution:"
+    #self.pprint_distribution(self.distribution)
 
   def process_action(self, action, cards):
     """
@@ -151,17 +177,23 @@ class HannaLarryPlayer(Player):
         pass
     elif action.action_type == "guess":
       if action.is_correct:
+        print "correct guess ", (action.which_player, action.which_card)
         # Remove from our guessable list.
         if (action.which_player, action.which_card) in self.guessable:
-          self.all_revealed.append((action.which_player, action.which_card))
+          self.all_revealed.append((action.which_player, action.which_card, cards[action.which_player][action.which_card]))
           self.guessable.remove((action.which_player, action.which_card))
+        if action.which_player == self.me:
+          if action.which_card in self.passable:
+            self.passable.remove(action.which_card)
+          if action.which_card in self.flippable:
+            self.flippable.remove(action.which_card)
       else:
         wrong_guess = action.guess + self.NUM_RANKS * cards[action.which_player][action.which_card]["color"]
         self.wrong_guesses[action.which_player][action.which_card][wrong_guess] = True
     elif action.action_type == "flip":
       # TODO: They think that card is already known or not important? Do something with that information.
       # Remove from our guessable list.
-      self.all_revealed.append((action.player, action.which_card))
+      self.all_revealed.append((action.player, action.which_card, cards[action.player][action.which_card]))
       if (action.player, action.which_card) in self.guessable:
         self.guessable.remove((action.player, action.which_card))
     else:
@@ -180,6 +212,10 @@ class HannaLarryPlayer(Player):
       for j in xrange(self.CARDS_PER_PLAYER):
         if cards[i][j] >= 0:
           known.add(cards[i][j])
+        # Also include our deductions.
+        elif self.known_cards[i][j] != None and self.known_cards[i][j] >= 0:
+          known.add(self.known_cards[i][j])
+
     return known
 
   def initial_possibilities(self, card_index, value):

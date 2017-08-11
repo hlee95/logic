@@ -2,14 +2,14 @@ from Game import Game
 from ManualAI import ManualAI
 from HannaLarryPlayer import HannaLarryPlayer
 
-AIs = []
-for i in range(4):
-    AIs.append(HannaLarryPlayer(i))
 num_games = 1000
 total_score = [0] * 4
 debug = True
 
 for game_count in range(0, num_games):
+	AIs = []
+	for i in range(4):
+ 		AIs.append(HannaLarryPlayer(i))
 	g = Game(AIs, debug = debug)
 	score = [0] * 4
 	try:
@@ -19,5 +19,5 @@ for game_count in range(0, num_games):
 		print(">>> Error: %r <<<" % e.args[1])
 
 	total_score = [sum(x) for x in zip(score, total_score)]
-	print("score is %r" % score)
+	print("\n\n\n\n\n\n\n\n\n\n\nscore is %r" % score)
 	print("total score is %r" % total_score)

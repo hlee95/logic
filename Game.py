@@ -70,8 +70,16 @@ class Game:
         receive_player = (self.turn+2)%4
 
         self.check_input(which_card >= 0 and which_card < 6, ("Cannot pass the %dth card" % which_card))
-        # self.check_input(self.pgs[receive_player].cards[from_player][which_card]['rank'] == 'Unclear', \
-        #        ("Cannot pass the %dth card, as it has already been passed" % which_card))
+
+        should_check = False
+        for i in xrange(6):
+            if self.pgs[receive_player].cards[from_player][i]['rank'] == 'Unclear':
+                should_check = True
+                break
+        if should_check:
+            print "checking pass", [self.pgs[receive_player].cards[from_player][i]['rank'] for i in xrange(6)]
+            self.check_input(self.pgs[receive_player].cards[from_player][which_card]['rank'] == 'Unclear', \
+                   ("Cannot pass the %dth card, as it has already been passed" % which_card))
 
         self.pgs[receive_player].cards[from_player][which_card] = self.gs.cards[from_player][which_card]
 
@@ -85,10 +93,22 @@ class Game:
         self.check_input(which_card >= 0 and which_card < 6, ("Cannot guess the %dth card" % which_card))
         self.check_input(guess >= 0 and guess < 12, ("Cannot guess that a card is %d" % guess))
         self.check_input((guessing_player - which_player) % 2 != 0, "Can't guess a card of your friend")
-        print "guess card"
-        print self.pgs[guessing_player].cards[which_player][which_card]
-        # self.check_input(self.pgs[guessing_player].cards[which_player][which_card]['rank'] == 'Unclear', \
-        #         "Cannot guess the %dth card, as it has already been revealed" % which_card)
+
+        should_check = False
+        for i in xrange(6):
+            if self.pgs[guessing_player].cards[which_player][i]['rank'] == 'Unclear':
+                should_check = True
+                break
+        if not should_check:
+            for i in xrange(6):
+                if self.pgs[guessing_player].cards[(which_player + 2) % 4][i]['rank'] == 'Unclear':
+                    should_check = True
+                    break
+        if should_check:
+            print "checking guess", [self.pgs[guessing_player].cards[which_player][i]['rank'] for i in xrange(6)], [self.pgs[guessing_player].cards[(which_player + 2) % 4][i]['rank'] for i in xrange(6)]
+
+            self.check_input(self.pgs[guessing_player].cards[which_player][which_card]['rank'] == 'Unclear', \
+                    "Cannot guess the %dth card, as it has already been revealed" % which_card)
 
         is_correct = self.gs.cards[which_player][which_card]['rank'] == guess
 
@@ -105,8 +125,16 @@ class Game:
         flip_player = (self.turn+2)%4
 
         self.check_input(which_card >= 0 and which_card < 6, ("Cannot pass the %dth card" % which_card))
-        # self.check_input(self.pgs[(flip_player + 1) % 4].cards[flip_player][which_card]['rank'] == 'Unclear', \
-        #         "Cannot flip the %dth card, as it has already been flipped" % which_card)
+
+        should_check = False
+        for i in xrange(6):
+            if self.pgs[(flip_player + 1) % 4].cards[flip_player][i]['rank'] == 'Unclear':
+                should_check = True
+                break
+        if should_check:
+            print "checking flip", [self.pgs[(flip_player + 1) % 4].cards[flip_player][i]['rank'] for i in xrange(6)]
+            self.check_input(self.pgs[(flip_player + 1) % 4].cards[flip_player][which_card]['rank'] == 'Unclear', \
+                "Cannot flip the %dth card, as it has already been flipped" % which_card)
 
         for i in range(4):
             self.pgs[i].cards[flip_player][which_card] = self.gs.cards[flip_player][which_card]
