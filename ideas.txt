@@ -1,0 +1,25 @@
+Keep track of things we can/should try to implement.
+
+(1) Correctness (Bugs)
+  (a) Need to deduce that only one option is possible even if it's not in our gamestate. Need to track this information. But don't get confused with self.known_cards. Handle this correctly, because it is not correct now.
+  (b) Actually pass the card with the lowest probability and flip the one with the highest probability (although we need to know which has highest probability when from our point of view it is 100% probable hmm).
+    (i) Idea: Keep track of what cards your partner knows for sure, figure out which of our cards is the least likely from their point of view.
+  (c) Sometimes, reaches the conclusion that no configuration is possible rip.
+
+(2) Optimizations
+  (a) Do not try to claim unless it has been a certain number of turns. This saves a lot of effort by avoiding calculating the distribution even when we know we don't need it.
+  (b) If we feel that we will be become 100% certain later than the opponent will, then go ahead and claim even if we're only 50% sure.
+    (i) We can guess this by running a lot of random tests and determining what the average number of possibilities is at every round, and then we can know if we are above or below average.
+    (ii) Can also collect stats on how many rounds it takes for us to be 100% sure and apply that.
+  (c) Streamline conversion between different data formats as much as possible.
+
+(3) Brainstorm
+  (a) At some point, when there are only a few possible configurations left, we should begin mapping configurations to probabilities instead of just looking at the profile of particular cards at particular positions independently.
+  (b) Heuristics
+    (i) If someone passes a card, it means it gives a lot of information, so we can slightly increase the probability of "less likely" cards in that position?
+    (ii) If someone flips their card, it's because they think it's already known or likely to be known, idk how to leverage that though.
+    (iii) An incorrect guess, or any guess, means that that player thought that was the most likely or that it eliminated the most number of possibilities, which are kind of the same thing, so we can decrease the probability of the guessed rank being at other places?
+
+(4) Other Notes
+  (a) Because we don't play smart, sometimes we have no cards left to pass and still no one has claimed, and the game engine throws an error if you re-pass a card, so I commented that out.
+

@@ -1,9 +1,10 @@
 from Game import Game
 from ManualAI import ManualAI
+from HannaLarryPlayer import HannaLarryPlayer
 
 AIs = []
 for i in range(4):
-    AIs.append(ManualAI(i))
+    AIs.append(HannaLarryPlayer(i))
 num_games = 1000
 total_score = [0] * 4
 debug = True
