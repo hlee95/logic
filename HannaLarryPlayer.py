@@ -13,28 +13,36 @@ class HannaLarryPlayer(Player):
     self.NUM_CARDS = 24
     self.me = position
     self.teammate = (self.me + 2) % self.NUM_PLAYERS
+    # So that we know which actions from the history we need to consider.
+    self.next_action_idx = 0
+
     # Save time by not updating our stuff until we actually need to make a move
     # or until there have been enough moves that we can maybe actually claim.
     # Also, don't claim if the last action was ours I think? Idk.
     self.num_turns = 0
-    self.MIN_TURNS_TO_CLAIM = 5
-    # Two level map. Position is 0 - 23.
-    # Position 13 means player 13 / 6 = 2, card 13 % 6 = 1.
-    # Map position to a dictionary of ranks 0 - 23 to their probability.
-    self.distribution = self.empty_dict()
-    self.teammate_distribution = self.empty_dict()
-    # Keep track of +/- likelihoods.
-    self.heuristics = self.empty_dict()
+    self.MIN_TURNS_TO_CLAIM = 8
+    self.MIN_TURNS_TO_CALCULATE_TEAMMATE = 8
+    self.num_possibilities = 0
+    self.MIN_TEAMMATE_KNOWN_CARDS_TO_CALCULATE = 4
+
     # Keep track of what we can flip, pass and guess.
     self.flippable = range(self.CARDS_PER_PLAYER)
     self.passable = range(self.CARDS_PER_PLAYER)
     self.guessable = self.get_opponent_positions()
 
+    # Two level map. Position is 0 - 23.
+    # Position 13 means player 13 / 6 = 2, card 13 % 6 = 1.
+    # Map position to a dictionary of ranks 0 - 23 to their probability.
+    self.distribution = self.empty_dict()
     self.wrong_guesses = self.empty_dict()
     # Includes gamestate + additional deductions that are 100% certain.
+    # 2D array whose values are None or 0-23.
     self.deduced_cards = self.empty_array()
-    # So that we know which actions from the history we need to consider.
-    self.next_action_idx = 0
+    self.teammate_deduced_cards = self.empty_array()
+    self.teammate_distribution = self.empty_dict()
+
+    # Keep track of +/- likelihoods.
+    self.heuristics = self.empty_dict()
 
     # possible configurations and likelihood
     # should have a density map to make the best guess
@@ -48,11 +56,37 @@ class HannaLarryPlayer(Player):
     """
     print "{} passing card".format(self.me)
     self.process_gamestate(gamestate)
-    if len(self.passable) > 0:
-      which_card = random.choice(self.passable)
-      self.passable.remove(which_card)
+    num_teammate_known_cards = 0
+    any_deduced_card = None
+    for i in xrange(self.NUM_PLAYERS):
+      for j in xrange(self.CARDS_PER_PLAYER):
+        deduced_card = self.teammate_deduced_cards[i][j]
+        if deduced_card is not None:
+          num_teammate_known_cards += 1
+          any_deduced_card = (i, j, deduced_card)
+    if num_teammate_known_cards > self.MIN_TEAMMATE_KNOWN_CARDS_TO_CALCULATE:
+      self.update_teammate_distribution(gamestate.cards)
+      num_teammate_possibilities = self.teammate_distribution[any_deduced_card[0]][any_deduced_card[1]][any_deduced_card[2]]
+      # Figure out which card will give them the most information.
+      # The one that's closest to 50/50?
+      closest_to_half = -1
+      which_card = None
+      for j in self.passable:
+        for card, count in self.teammate_distribution[self.me][j].iteritems():
+          probability = 1.0 * count / num_teammate_possibilities
+          if abs(probability - .5) < abs(closest_to_half - .5):
+            closest_to_half = probability
+            which_card = j
+      # Fail fast haha.
+      if which_card is None:
+        raise Exception("which card is None")
     else:
-      which_card = 0
+      # TODO: Depend on heuristics when it's too costly to calculate.
+      if len(self.passable) > 0:
+        which_card = random.choice(self.passable)
+        self.passable.remove(which_card)
+      else:
+        which_card = 0
     print " {} passed {}".format(self.me, which_card)
     return which_card
 
@@ -62,17 +96,17 @@ class HannaLarryPlayer(Player):
     """
     print "{} guessing card".format(self.me)
     self.process_gamestate(gamestate)
-    # Get positions corresponding to opponents' cards.
-    # TODO: Iterate through the distribution and guess the most likely card.
-    # Make sure to only guess from the opponents' hands.
+    self.update_distribution(gamestate.cards)
     if len(self.guessable) == 0:
       return ((self.me + 1) % self.NUM_PLAYERS, 0, 0)
+    # Find guess with highest probability.
     highest_count = 0
     guess = None
     for i, j in self.guessable:
-      # print i, j
+      # Don't guess if it's already been deduced.
+      if self.deduced_cards[i][j] >= 0:
+        continue
       for card, count in self.distribution[i][j].iteritems():
-        # print card, count
         if count > highest_count:
           count = highest_count
           guess = (i, j, self.num_to_rank(card))
@@ -85,6 +119,7 @@ class HannaLarryPlayer(Player):
     """
     print "{} flipping card".format(self.me)
     self.process_gamestate(gamestate)
+    # self.update_teammate_distribution(gamestate.cards)
     if len(self.flippable) > 0:
       which_card = random.choice(self.flippable)
       self.flippable.remove(which_card)
@@ -99,7 +134,7 @@ class HannaLarryPlayer(Player):
     """
     Return a tuple (claiming, cards)
      - claiming is a boolean
-     - cards is a list of lists of dictionaries {color: , rank: }
+     - cards is a 4x6 array of dictionaries with the form {color: [0,1], rank: [0,11]}
     """
     # print "{} chance to claim".format(self.me)
     if self.num_turns < self.MIN_TURNS_TO_CLAIM:
@@ -107,6 +142,7 @@ class HannaLarryPlayer(Player):
     # Good idea: claim even if we are not 100% sure, because
     # we will win more on average? Maybe. Not yet.
     self.process_gamestate(gamestate)
+    self.update_distribution(gamestate.cards)
     claim = []
     for i in xrange(self.NUM_PLAYERS):
       hand = []
@@ -122,7 +158,7 @@ class HannaLarryPlayer(Player):
       claim.append(hand)
     if len(claim[0]) < self.CARDS_PER_PLAYER:
       return (False, [])
-    print "{} is claiming ".format(self.me), claim
+    print "{} is claiming, num_turns {},  ".format(self.me, self.num_turns), claim
     return (True, claim)
 
   """ ----------------
@@ -136,12 +172,14 @@ class HannaLarryPlayer(Player):
     for i in xrange(self.next_action_idx, len(gamestate.history)):
       self.process_action(gamestate.history[i], gamestate.cards)
     self.next_action_idx = len(gamestate.history)
+
+  def update_distribution(self, gs_cards):
     # Update the distribution.
     # Combine the gamestate with the cards we have deduced.
-    all_known_cards = self.undict_cards(gamestate.cards)
+    all_known_cards = self.undict_cards(gs_cards)
     for i in xrange(self.NUM_PLAYERS):
       for j in xrange(self.CARDS_PER_PLAYER):
-        if self.deduced_cards[i][j] is not None and all_known_cards[i][j] > 0:
+        if self.deduced_cards[i][j] is not None:
           all_known_cards[i][j] = self.deduced_cards[i][j]
     self.distribution = self.enumerate_possibilities(all_known_cards)
     # Add our deductions to self.deduced_cards.
@@ -160,9 +198,36 @@ class HannaLarryPlayer(Player):
         if exactly_one_possibility:
           # print "deduced ({}, {}) is {}".format(i, j, found_card)
           self.deduced_cards[i][j] = found_card
-
     # print "Current distribution:"
     # self.pprint_distribution(self.distribution)
+
+  def update_teammate_distribution(self, gs_cards):
+    # Update teammate distribution.
+    print "{} updating teammate distribution".format(self.me)
+    teammate_known_cards = self.extract_colors(gs_cards)
+    for i in xrange(self.NUM_PLAYERS):
+      for j in xrange(self.CARDS_PER_PLAYER):
+        if self.teammate_deduced_cards[i][j] is not None:
+          teammate_known_cards[i][j] = self.teammate_deduced_cards[i][j]
+    # print teammate_known_cards
+    self.teammate_distribution = self.enumerate_possibilities(teammate_known_cards)
+    # print self.teammate_distribution
+    for i in xrange(self.NUM_PLAYERS):
+      for j in xrange(self.CARDS_PER_PLAYER):
+        exactly_one_possibility = False
+        found_card = None
+        for card, count in self.teammate_distribution[i][j].iteritems():
+          if count > 0:
+            if exactly_one_possibility:
+              exactly_one_possibility = False
+              break
+            else:
+              exactly_one_possibility = True
+              found_card = card
+        if exactly_one_possibility:
+          # print "deduced ({}, {}) is {}".format(i, j, found_card)
+          self.teammate_deduced_cards[i][j] = found_card
+    # print self.teammate_deduced_cards
 
   def process_action(self, action, cards):
     """
@@ -171,15 +236,19 @@ class HannaLarryPlayer(Player):
     # TODO: Update heuristics based on each action.
     self.num_turns += 1
     if action.action_type == "pass":
-      # They think this card gives the most information
       if action.player == self.me:
+        self.teammate_deduced_cards[self.me][action.which_card] = self.card_to_num(cards[self.me][action.which_card])
+      elif action.player == self.teammate:
+        # Teammate thinks this card gives the most information.
         pass
       else:
-        # TODO: Do something haha.
+        # Opponent passed a card.
         pass
     elif action.action_type == "guess":
+      guess = action.guess + self.NUM_RANKS * cards[action.which_player][action.which_card]["color"]
       if action.is_correct:
-        # Remove from our guessable list.
+        self.teammate_deduced_cards[action.which_player][action.which_card] = guess
+        # Remove from our guessable, passable, flippable lists.
         if (action.which_player, action.which_card) in self.guessable:
           self.guessable.remove((action.which_player, action.which_card))
         if action.which_player == self.me:
@@ -188,9 +257,9 @@ class HannaLarryPlayer(Player):
           if action.which_card in self.flippable:
             self.flippable.remove(action.which_card)
       else:
-        wrong_guess = action.guess + self.NUM_RANKS * cards[action.which_player][action.which_card]["color"]
-        self.wrong_guesses[action.which_player][action.which_card][wrong_guess] = True
+        self.wrong_guesses[action.which_player][action.which_card][guess] = True
     elif action.action_type == "flip":
+      self.teammate_deduced_cards[action.player][action.which_card] = self.card_to_num(cards[action.player][action.which_card])
       # TODO: They think that card is already known or not important? Do something with that information.
       # Remove from our guessable list.
       if (action.player, action.which_card) in self.guessable:
@@ -201,31 +270,6 @@ class HannaLarryPlayer(Player):
   """ ------------------
       Enumerate / Filter
       ------------------ """
-
-  def initial_possibilities(self, card_index, value):
-    """
-    Produces an array of possible values for a card, purely by index and value (-2 to 23)
-
-    card_index: Value from 0-5, a player's possible cards
-    value: Value from -2 to 23 for the card.
-    """
-    # This means it's a known card, return a list just containing the value
-    if value >= 0:
-      return [value]
-
-    # Indexes 0,1 can only be rank 0-9; 2,3 can only be 1-10; 4,5 can only be 2-11
-    # Number of invalid = number of cards to one side / 2
-    # (two colors available to fill up with max or lowest values respectively)
-    invalid_right = (self.CARDS_PER_PLAYER - 1 - card_index) /2
-    invalid_left = card_index / 2
-    poss_values = [j for j in range(invalid_left, self.NUM_RANKS - invalid_right)]
-
-    # If color is 1, add color shift to all values
-    if value == -1:
-      for i in xrange(len(poss_values)):
-        poss_values[i] += self.NUM_RANKS
-
-    return poss_values
 
   def enumerate_possibilities(self, game_board):
     """
@@ -252,6 +296,31 @@ class HannaLarryPlayer(Player):
             known.add(cards[i][j])
 
       return known
+
+    def initial_possibilities(card_index, value):
+      """
+      Produces an array of possible values for a card, purely by index and value (-2 to 23)
+
+      card_index: Value from 0-5, a player's possible cards
+      value: Value from -2 to 23 for the card.
+      """
+      # This means it's a known card, return a list just containing the value
+      if value >= 0:
+        return [value]
+
+      # Indexes 0,1 can only be rank 0-9; 2,3 can only be 1-10; 4,5 can only be 2-11
+      # Number of invalid = number of cards to one side / 2
+      # (two colors available to fill up with max or lowest values respectively)
+      invalid_right = (self.CARDS_PER_PLAYER - 1 - card_index) /2
+      invalid_left = card_index / 2
+      poss_values = [j for j in range(invalid_left, self.NUM_RANKS - invalid_right)]
+
+      # If color is 1, add color shift to all values
+      if value == -1:
+        for i in xrange(len(poss_values)):
+          poss_values[i] += self.NUM_RANKS
+
+      return poss_values
 
     def iterate(current_index):
       """
@@ -346,7 +415,7 @@ class HannaLarryPlayer(Player):
     card_dicts = self.empty_dict()
     for i in xrange(self.NUM_PLAYERS):
       for j in xrange(self.CARDS_PER_PLAYER):
-        possibilities = self.initial_possibilities(j, game_board[i][j])
+        possibilities = initial_possibilities(j, game_board[i][j])
         for possibility in possibilities:
           card_dicts[i][j][possibility] = 0
 
@@ -422,10 +491,11 @@ class HannaLarryPlayer(Player):
     return new_cards
 
   def extract_colors(self, cards):
-    colors = []
-    for hand in cards:
-      for card in hand:
-        colors.append(card["color"])
+    colors = self.empty_array()
+    for i in xrange(self.NUM_PLAYERS):
+      for j in xrange(self.CARDS_PER_PLAYER):
+        # 0 -> -2, 1 -> -1
+        colors[i][j] = cards[i][j]["color"] - 2
     return colors
 
   def empty_array(self):
